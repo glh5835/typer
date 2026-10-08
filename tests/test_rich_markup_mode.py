@@ -11,6 +11,27 @@ runner = CliRunner()
 rounded = ["╭", "─", "┬", "╮", "│", "├", "┼", "┤", "╰", "┴", "╯"]
 
 
+def _assert_markup_mode_help(
+    app: typer.Typer, mode: str | None, help_first_line: str, lines: list[str]
+) -> None:
+    # Shared checks for the markup mode tests below: the command runs, and the
+    # help block between its first help line and the Arguments panel matches
+    # the lines expected for the current markup mode.
+    assert app.rich_markup_mode == mode
+
+    result = runner.invoke(app, ["World"])
+    assert "Hello World" in result.stdout
+
+    result = runner.invoke(app, ["--help"])
+    result_lines = [line.strip() for line in result.stdout.split("\n")]
+    if mode:
+        assert any(c in result.stdout for c in rounded)
+    help_start = [i for i, row in enumerate(result_lines) if help_first_line in row][0]
+    arg_start = [i for i, row in enumerate(result_lines) if "Arguments" in row][0]
+    assert help_start != -1
+    assert result_lines[help_start:arg_start] == lines
+
+
 def test_rich_markup_mode_none():
     app = typer.Typer(rich_markup_mode=None)
 
@@ -113,19 +134,7 @@ def test_markup_mode_newline_pr815(mode: str, lines: list[str]):
         """
         print(f"Hello {arg}")
 
-    assert app.rich_markup_mode == mode
-
-    result = runner.invoke(app, ["World"])
-    assert "Hello World" in result.stdout
-
-    result = runner.invoke(app, ["--help"])
-    result_lines = [line.strip() for line in result.stdout.split("\n")]
-    if mode:
-        assert any(c in result.stdout for c in rounded)
-    help_start = result_lines.index("First line")
-    arg_start = [i for i, row in enumerate(result_lines) if "Arguments" in row][0]
-    assert help_start != -1
-    assert result_lines[help_start:arg_start] == lines
+    _assert_markup_mode_help(app, mode, "First line", lines)
 
 
 @pytest.mark.parametrize(
@@ -149,19 +158,7 @@ def test_markup_mode_newline_issue447(mode: str, lines: list[str]):
         """
         print(f"Hello {arg}")
 
-    assert app.rich_markup_mode == mode
-
-    result = runner.invoke(app, ["World"])
-    assert "Hello World" in result.stdout
-
-    result = runner.invoke(app, ["--help"])
-    result_lines = [line.strip() for line in result.stdout.split("\n")]
-    if mode:
-        assert any(c in result.stdout for c in rounded)
-    help_start = result_lines.index("First line")
-    arg_start = [i for i, row in enumerate(result_lines) if "Arguments" in row][0]
-    assert help_start != -1
-    assert result_lines[help_start:arg_start] == lines
+    _assert_markup_mode_help(app, mode, "First line", lines)
 
 
 @pytest.mark.parametrize(
@@ -226,19 +223,7 @@ def test_markup_mode_newline_mixed(mode: str, lines: list[str]):
         """
         print(f"Hello {arg}")
 
-    assert app.rich_markup_mode == mode
-
-    result = runner.invoke(app, ["World"])
-    assert "Hello World" in result.stdout
-
-    result = runner.invoke(app, ["--help"])
-    result_lines = [line.strip() for line in result.stdout.split("\n")]
-    if mode:
-        assert any(c in result.stdout for c in rounded)
-    help_start = [i for i, row in enumerate(result_lines) if "This header" in row][0]
-    arg_start = [i for i, row in enumerate(result_lines) if "Arguments" in row][0]
-    assert help_start != -1
-    assert result_lines[help_start:arg_start] == lines
+    _assert_markup_mode_help(app, mode, "This header", lines)
 
 
 @pytest.mark.parametrize(
@@ -266,19 +251,7 @@ def test_markup_mode_bullets_single_newline(mode: str, lines: list[str]):
         """
         print(f"Hello {arg}")
 
-    assert app.rich_markup_mode == mode
-
-    result = runner.invoke(app, ["World"])
-    assert "Hello World" in result.stdout
-
-    result = runner.invoke(app, ["--help"])
-    result_lines = [line.strip() for line in result.stdout.split("\n")]
-    if mode:
-        assert any(c in result.stdout for c in rounded)
-    help_start = result_lines.index("First line")
-    arg_start = [i for i, row in enumerate(result_lines) if "Arguments" in row][0]
-    assert help_start != -1
-    assert result_lines[help_start:arg_start] == lines
+    _assert_markup_mode_help(app, mode, "First line", lines)
 
 
 @pytest.mark.parametrize(
@@ -311,19 +284,7 @@ def test_markup_mode_bullets_double_newline(mode: str, lines: list[str]):
         """
         print(f"Hello {arg}")
 
-    assert app.rich_markup_mode == mode
-
-    result = runner.invoke(app, ["World"])
-    assert "Hello World" in result.stdout
-
-    result = runner.invoke(app, ["--help"])
-    result_lines = [line.strip() for line in result.stdout.split("\n")]
-    if mode:
-        assert any(c in result.stdout for c in rounded)
-    help_start = result_lines.index("First line")
-    arg_start = [i for i, row in enumerate(result_lines) if "Arguments" in row][0]
-    assert help_start != -1
-    assert result_lines[help_start:arg_start] == lines
+    _assert_markup_mode_help(app, mode, "First line", lines)
 
 
 def test_markup_mode_default():

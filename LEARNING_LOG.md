@@ -113,3 +113,25 @@
 - 我如何复现：`cat artifacts/phase3/gh_evidence.txt`；复现脚本思路见 `repro_closed_bugs.log`（envvar/default_factory/metavar 三个最小用例）。
 - 下一步：阶段 4 保守重构（tests/ 内部去重、统一风格，不动核心源码）。
 
+## 阶段 4：重构（保守模式）
+- 开始/结束时间：2026-10-09 03:55 – 04:10
+- 目标：仅消除 tests/ 内重复，统一断言风格；核心源码零改动。
+- 我运行的命令：
+  - `pytest tests/test_rich_markup_mode.py -q`（重构后目标文件：28 passed + 2 xfailed，与重构前完全一致）
+  - 官方全量：**1503 passed, 15 skipped, 2 xfailed**（与重构前一致，`artifacts/phase4/test_full_after.log`）
+  - `ruff check` + `ruff format --check` 通过
+- 关键输出：`tests/test_rich_markup_mode.py` 净变化 **+26/-65**。5 个测试（`test_markup_mode_newline_pr815/issue447/mixed`、`test_markup_mode_bullets_single/double_newline`）各自复制了一段 13 行的"跑命令→取 help→定位首行→比对行块"断言，提取为文件内辅助函数 `_assert_markup_mode_help(app, mode, help_first_line, lines)`。唯一语义微调：`result_lines.index("First line")`（精确匹配）统一为子串匹配 `[i for i,row in enumerate(...) if marker in row][0]`——对这 5 个用例等价（原精确匹配能命中的行，子串匹配命中同一行）。
+- 为什么值得消除：同一断言块 5 份拷贝，新增 markup mode 用例时改一处漏四处；提取后每个测试只剩"app 定义 + 期望行列表"，测试意图更清晰。
+- 哪些"看起来能重构"但**没有动**（及理由）：
+  1. 298 个测试文件各自的模块级 `runner = CliRunner()`——这是上游的显式风格（每文件自包含、可独立阅读），改成 conftest fixture 会触碰全部测试文件，与上游合并必冲突；
+  2. `tests/test_tutorial/**` 里大量结构相似的 tutorial 测试——它们逐个镜像 `docs_src/` 文件，重复是"文档即测试"模式的本质，合并会破坏一一对应关系；
+  3. `typer/params.py` 中 Argument/Option 各约 1800 行的参数定义"重复"——那是公共 API 的 docstring（文档源），不是代码重复；
+  4. vendored `typer/_click/**` 里与 click 相似的结构——保持与上游可 diff 是 vendoring 的前提。
+- 失败尝试：无（本步骤一次通过）。
+- 涉及文件：`tests/test_rich_markup_mode.py`、`artifacts/phase4/test_full_after.log`。
+- 可迁移知识：
+  1. 重构测试的安全网是"重构前后测试结果逐字相同"（本例 28 passed + 2 xfailed → 相同）；
+  2. 给活跃上游贡献时，重构的合并冲突成本 ≈ 重构收益 × 未来 diff 概率，只动"纯新增辅助函数 + 局部调用点"这种低冲突面；
+  3. "重复"要区分三种：意外复制（值得消除）、模式性重复（每文件 runner，是风格）、本质性重复（tutorial 镜像，是设计）。
+- 我如何复现：`git show <本次commit>` 看 diff；`pytest tests/test_rich_markup_mode.py -v` 看 30 个用例全部按原名通过。
+- 下一步：阶段 5 补公开 API docstring 与 CONTRIBUTING 新人指南。

@@ -1,0 +1,7 @@
+== #1787 envvar on Option ==
+exit: 0 | out: Hello bar | err: 
+== #1353 default_factory empty list ==
+exit: 0 | out: items=[] | err: 
+== #1156 Argument metavar panel vs usage ==
+---- usage/args output ----
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        

@@ -87,3 +87,29 @@
   4. 断言路径用 `Path` 对象比较避免分隔符陷阱。
 - 我如何复现：`venv/Scripts/python.exe -m pytest tests/test_result_repr.py tests/test_completion/test_bash_version.py tests/test_get_app_dir_paths.py tests/test_optional_enum_default.py -v`；覆盖率对比看 `artifacts/phase1/test_branchcov.log` vs `artifacts/phase2/test_branchcov_after.log`。
 - 下一步：阶段 3 从 GitHub Issues 找 1-3 个可复现 bug，先写复现测试再修。
+
+## 阶段 3：测试驱动修 bug（结论：无合格 issue，转为修复验证）
+- 开始/结束时间：2026-10-09 03:35 – 03:55
+- 目标：挑 1-3 个开放 bug issue，先写复现测试再修复。
+- 我运行的命令（寻issue 的 4 种方式）：
+  1. `gh issue list --repo fastapi/typer --label bug --state open` → **空**
+  2. `gh label list` + 按各标签（investigate/confirmed/good first issue/help wanted）逐一查开放 issue → 全空
+  3. `gh api search/issues?q=repo:fastapi/typer+state:open+type:issue` → **总数 1，仅 #678 Roadmap**
+  4. 转而验证"最近关闭的 bug 是否修干净"（修复不完整 = 真 bug）
+- 关键输出：typer 上游 triage 极快，**当前零个开放 bug issue**。对 3 个最近关闭的 bug 在 0.27.3 上跑复现（`artifacts/phase3/repro_closed_bugs.log`）：
+  | issue | 现象 | 0.27.3 验证结果 | 树内回归测试 |
+  |---|---|---|---|
+  | #1787 envvar 在 Option 上失效（0.26.0 回归） | `ME=bar` 不被读取 | **已修复**（读到 envvar，exit 0） | `tests/test_others.py:328` `test_option_envvar` |
+  | #1353 default_factory 返回空列表报错 | 空 list 工厂崩 | **已修复**（`items=[]`） | `tests/test_others.py:320` |
+  | #1156 Argument(metavar) 面板与 usage 不一致 | 两处显示不同 | **已修复**（usage `{MY_ARG}` 与面板一致） | `tests/test_rich_utils.py` 等 metavar 用例 |
+- 另一个自查发现（阶段 2 顺带）：`get_app_dir(force_posix=True)` 在 Windows 上不可达（`if WIN:` 提前 return）。核对 docstring：只为 Mac/Unix 列了 POSIX 变体、未承诺 Windows；且结构与上游 click 8.3.1 一致（vendored 头注释可证）。**定性：上游怪癖，文档行为自洽，不修**（改它反而会偏离 click 语义）。
+- 失败尝试：`git fetch upstream` 与 WebFetch raw.githubusercontent 均被网络重置（ECONNRESET），但 `gh api` 正常，足以完成 issue 调查。
+- 为什么这样做：任务书要求"只修有测试证据的问题"。在零开放 bug 的前提下，任何"修 bug"都只能是无依据的改动；把调查过程和修复验证做实，是本阶段能交付的最大真实价值。
+- 涉及文件：`artifacts/phase3/{gh_evidence.txt,repro_closed_bugs.log}`（无源码改动，无 fix commit——如实记录）。
+- 可迁移知识：
+  1. 活跃上游（fastapi 系）的 issue 池常被清空，贡献 bug fix 的窗口期很短；`gh api search/issues` 是绕过标签漏标的最终确认手段；
+  2. "验证已关闭 bug 是否修干净"是接手旧代码库时建立信心的手段：复现脚本 + 树内测试对照；
+  3. 判定"是不是 bug"的标准是"文档承诺 vs 实际行为"，而不是直觉——force_posix 看着像 bug，但 docstring 没承诺 Windows 行为。
+- 我如何复现：`cat artifacts/phase3/gh_evidence.txt`；复现脚本思路见 `repro_closed_bugs.log`（envvar/default_factory/metavar 三个最小用例）。
+- 下一步：阶段 4 保守重构（tests/ 内部去重、统一风格，不动核心源码）。
+

@@ -198,6 +198,12 @@ def Default(value: DefaultType) -> DefaultType:
 
 
 class CommandInfo:
+    """Internal data about a command registered with `Typer.command()`.
+
+    Holds the callback and the metadata needed to build a `TyperCommand`
+    from it when the app is compiled to a Click command.
+    """
+
     def __init__(
         self,
         name: str | None = None,
@@ -233,6 +239,13 @@ class CommandInfo:
 
 
 class TyperInfo:
+    """Internal data about a `Typer` app or a sub-app added with `add_typer()`.
+
+    Fields set to `Default(...)` placeholders record "not set by the user",
+    which lets `solve_typer_info_defaults()` merge values across the
+    `add_typer()`, `@subapp.callback()`, and `typer.Typer(...)` levels.
+    """
+
     def __init__(
         self,
         typer_instance: Optional["Typer"] = Default(None),
@@ -278,6 +291,13 @@ class TyperInfo:
 
 
 class ParameterInfo:
+    """Base configuration shared by `OptionInfo` and `ArgumentInfo`.
+
+    Users normally create these through the public `typer.Option()` and
+    `typer.Argument()` factory functions instead of instantiating this
+    class directly.
+    """
+
     def __init__(
         self,
         *,
@@ -386,6 +406,8 @@ class ParameterInfo:
 
 
 class OptionInfo(ParameterInfo):
+    """Configuration created by the public `typer.Option()` factory."""
+
     def __init__(
         self,
         *,
@@ -514,6 +536,8 @@ class OptionInfo(ParameterInfo):
 
 
 class ArgumentInfo(ParameterInfo):
+    """Configuration created by the public `typer.Argument()` factory."""
+
     def __init__(
         self,
         *,
@@ -618,6 +642,12 @@ class ArgumentInfo(ParameterInfo):
 
 
 class ParamMeta:
+    """A single function parameter extracted by `get_params_from_function()`.
+
+    Combines the signature entry with its resolved type annotation and
+    (possibly absent) default, ready to be turned into a Click parameter.
+    """
+
     empty = inspect.Parameter.empty
 
     def __init__(
@@ -633,6 +663,8 @@ class ParamMeta:
 
 
 class DeveloperExceptionConfig:
+    """Settings attached to an exception to control pretty tracebacks."""
+
     def __init__(
         self,
         *,
@@ -646,8 +678,11 @@ class DeveloperExceptionConfig:
 
 
 class TyperPath(types.ParamType):
-    # Based originally on code from Click 8.3.1
-    # Partly rewritten and added an override for shell_complete
+    """A `Path` parameter type that also provides shell completion.
+
+    Based originally on code from Click 8.3.1.
+    Partly rewritten and added an override for shell_complete
+    """
 
     envvar_list_splitter: ClassVar[str] = os.path.pathsep
 

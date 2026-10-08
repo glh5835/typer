@@ -135,3 +135,31 @@
   3. "重复"要区分三种：意外复制（值得消除）、模式性重复（每文件 runner，是风格）、本质性重复（tutorial 镜像，是设计）。
 - 我如何复现：`git show <本次commit>` 看 diff；`pytest tests/test_rich_markup_mode.py -v` 看 30 个用例全部按原名通过。
 - 下一步：阶段 5 补公开 API docstring 与 CONTRIBUTING 新人指南。
+
+## 阶段 5：文档
+- 开始/结束时间：2026-10-09 04:10 – 04:45
+- 目标：公开 API 补 Google 风格 docstring；新增 CONTRIBUTING.md 新人指南；增量、不改官方文档风格。
+- 我运行的命令：
+  - AST 扫描找缺 docstring 的公开对象（`ast.get_docstring` 遍历 `typer/{__init__,main,models,params,utils,testing,completion,cli}.py` 的顶层类/函数）
+  - `ruff check typer tests docs_src scripts` + `ruff format --check` → **全部通过**
+  - `mypy typer` → 3 个错误（`colorama` stubs 缺失 ×1、vendored `_termui_impl.py` redundant-cast ×2）
+  - `ty check typer` → 16 个诊断
+  - 全量测试：**1503 passed, 15 skipped, 2 xfailed**（`artifacts/phase5/test_full.log`）
+- 关键输出：mypy 3 错误与 ty 16 诊断经 `git stash` 对照验证，**在未改动的原树上完全相同**——全部为存量问题（colorama 类型存根是本机环境差异；redundant-cast 与 contextmanager 风格告警在 vendored click 代码里，属 ty/mypy 版本与 CI 固定版本的漂移）。本次改动零新增 lint 问题。
+- 改动内容：
+  1. `typer/models.py`：8 个数据类补一句话 docstring（CommandInfo/TyperInfo/ParameterInfo/OptionInfo/ArgumentInfo/ParamMeta/DeveloperExceptionConfig/TyperPath），说明其在管线中的角色；
+  2. `typer/utils.py`：4 个用户可见异常类 + `get_params_from_function` / `parse_boolean_env_var`（后者用 Args/Returns 段）；
+  3. `typer/main.py`：22 个管线函数补简洁 docstring（except_hook、get_command/get_group、solve_*、get_click_type/get_click_param、convertor 工厂等）；
+  4. 新增根级 `CONTRIBUTING.md`：GitHub 自动展示；链接官方指南 + 基于 tonight 实操的"新人上手补充指南"（环境搭建、Windows 下 pytest 陷阱、三个测试环境变量含义、目录导览、测试风格、分支覆盖率技巧、提交前检查单）。
+- 失败尝试：
+  1. 给 `params.py` 的 Option 实现加 docstring 时两次 Edit 贴错内容（一次误删 assert 消息、一次误加 type: ignore）——**都立即用反向 Edit 恢复并 `git diff` 验证归零**。随后核实：缺 docstring 的只是两个 `@overload` 变体，实现本身有完整 docstring，params.py 根本无需改动；
+  2. 结论：长匹配串 Edit 有粘贴错位风险，改错后必须立即用 diff 验证。
+- 如何判断"公开 API"：以 `typer/__init__.py` 的 re-export 为准（用户直接 `import typer` 可见），加上用户会直接读到其报错信息的异常类；`cli.py`/`completion.py` 的内部回调和 `@overload` 存根不算（后者按惯例不带 docstring）。
+- 如何写可维护的 docstring：一句话说"它在管线中的角色"而不是重复函数名；只在参数含义非显然时写 Args/Returns；与相邻代码的详略程度保持一致（内部函数一句话，面向用户的加示例——本仓库后者已由 `Doc()` 注解承担）。
+- 涉及文件：`typer/main.py`、`typer/models.py`、`typer/utils.py`、`CONTRIBUTING.md`（新增）、`artifacts/phase5/test_full.log`。
+- 可迁移知识：
+  1. 验证"不是我引入的 lint 错误"的标准手法：`git stash` 改动 → 重跑 → 对照 → `git stash pop`；
+  2. docstring 改动也要跑全量测试与 lint（CI 对文档型 PR 同样跑检查）；
+  3. 仓库没有根级 CONTRIBUTING.md 时，GitHub 新人第一站是空的——建一个链接官方指南 + 实操补充的文件是零冲突的增量贡献。
+- 我如何复现：`python -c "import typer.utils; print(typer.utils.get_params_from_function.__doc__[:60])"`；CONTRIBUTING.md 按章节从上到下执行即可复现整个环境搭建流程。
+- 下一步：阶段 6 收尾报告 REPORT.md 与 PR_DRAFT.md。

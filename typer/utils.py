@@ -20,6 +20,11 @@ def _param_type_to_user_string(param_type: type[ParameterInfo]) -> str:
 
 
 class AnnotatedParamWithDefaultValueError(Exception):
+    """Raised when a default value is set inside `Annotated` (e.g. `Annotated[str, Argument("foo")]`).
+
+    The default must be set with `=` in the function signature instead.
+    """
+
     argument_name: str
     param_type: type[ParameterInfo]
 
@@ -36,6 +41,12 @@ class AnnotatedParamWithDefaultValueError(Exception):
 
 
 class MixedAnnotatedAndDefaultStyleError(Exception):
+    """Raised when a parameter mixes `Annotated` metadata with a `ParameterInfo` default.
+
+    For example `my_param: Annotated[str, Option()] = Option("foo")`; pick
+    one of the two styles for each parameter.
+    """
+
     argument_name: str
     annotated_param_type: type[ParameterInfo]
     default_param_type: type[ParameterInfo]
@@ -63,6 +74,8 @@ class MixedAnnotatedAndDefaultStyleError(Exception):
 
 
 class MultipleTyperAnnotationsError(Exception):
+    """Raised when a parameter has more than one Typer annotation, e.g. `Annotated[str, Option(), Argument()]`."""
+
     argument_name: str
 
     def __init__(self, argument_name: str):
@@ -76,6 +89,8 @@ class MultipleTyperAnnotationsError(Exception):
 
 
 class DefaultFactoryAndDefaultValueError(Exception):
+    """Raised when a parameter sets both `default_factory` and a default value."""
+
     argument_name: str
     param_type: type[ParameterInfo]
 
@@ -105,6 +120,17 @@ def _split_annotation_from_typer_annotations(
 
 
 def get_params_from_function(func: Callable[..., Any]) -> dict[str, ParamMeta]:
+    """Extract the CLI parameters from a command function's signature.
+
+    Resolves `Annotated` Typer metadata (or `ParameterInfo` defaults), merges
+    the function's type hints, and validates the parameter style rules.
+
+    Args:
+        func: The user's command or callback function.
+
+    Returns:
+        A mapping of parameter name to its `ParamMeta`.
+    """
     signature = inspect.signature(func, eval_str=True)
     type_hints = get_type_hints(func)
     params = {}
@@ -187,6 +213,15 @@ def get_params_from_function(func: Callable[..., Any]) -> dict[str, ParamMeta]:
 
 
 def parse_boolean_env_var(env_var_value: str | None, default: bool) -> bool:
+    """Interpret an environment variable value as a boolean.
+
+    Args:
+        env_var_value: The raw string from the environment, or `None` if unset.
+        default: The value to return when unset or not recognizable.
+
+    Returns:
+        The parsed boolean.
+    """
     if env_var_value is None:
         return default
     value = env_var_value.lower()

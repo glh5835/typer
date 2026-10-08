@@ -61,6 +61,11 @@ _typer_developer_exception_attr_name = "__typer_developer_exception__"
 def except_hook(
     exc_type: type[BaseException], exc_value: BaseException, tb: TracebackType | None
 ) -> None:
+    """Global `sys.excepthook` rendering pretty tracebacks for user code.
+
+    Hides Typer/Click internal frames and shows local variables (via rich
+    when available), unless disabled with `TYPER_STANDARD_TRACEBACK`.
+    """
     exception_config: DeveloperExceptionConfig | None = getattr(
         exc_value, _typer_developer_exception_attr_name, None
     )
@@ -110,6 +115,7 @@ def except_hook(
 
 
 def get_install_completion_arguments() -> tuple[_click.Parameter, _click.Parameter]:
+    """Build the `--install-completion` and `--show-completion` Click parameters."""
     install_param, show_param = get_completion_inspect_parameters()
     click_install_param, _ = get_click_param(install_param)
     click_show_param, _ = get_click_param(show_param)
@@ -1161,6 +1167,7 @@ class Typer:
 
 
 def get_group(typer_instance: Typer) -> TyperGroup:
+    """Compile a `Typer` app into a Click `TyperGroup` command tree."""
     group = get_group_from_info(
         TyperInfo(typer_instance),
         pretty_exceptions_short=typer_instance.pretty_exceptions_short,
@@ -1171,6 +1178,12 @@ def get_group(typer_instance: Typer) -> TyperGroup:
 
 
 def get_command(typer_instance: Typer) -> _click.Command:
+    """Compile a `Typer` app into a single Click `Command` or a `Group`.
+
+    An app with a callback, sub-apps, or multiple commands compiles to a
+    group; an app with exactly one command and no callback compiles to that
+    command directly.
+    """
     if typer_instance._add_completion:
         click_install_param, click_show_param = get_install_completion_arguments()
     if (
@@ -1209,6 +1222,11 @@ def get_command(typer_instance: Typer) -> _click.Command:
 
 
 def solve_typer_info_help(typer_info: TyperInfo) -> str:
+    """Resolve the help text for a group from a 6-level priority chain.
+
+    Explicit values (in `add_typer()`, `@subapp.callback()`, then
+    `typer.Typer()`) win over docstrings inferred from callbacks.
+    """
     # Priority 1: Explicit value was set in app.add_typer()
     if not isinstance(typer_info.help, DefaultPlaceholder):
         return inspect.cleandoc(typer_info.help or "")
@@ -1246,6 +1264,11 @@ def solve_typer_info_help(typer_info: TyperInfo) -> str:
 
 
 def solve_typer_info_defaults(typer_info: TyperInfo) -> TyperInfo:
+    """Resolve every `DefaultPlaceholder` field across the 3 definition levels.
+
+    For each field: `add_typer(...)` value, then `@subapp.callback()` value,
+    then `typer.Typer(...)` value, then the placeholder's default.
+    """
     values: dict[str, Any] = {}
     for name, value in typer_info.__dict__.items():
         # Priority 1: Value was set in app.add_typer()
@@ -1287,6 +1310,7 @@ def get_group_from_info(
     suggest_commands: bool,
     rich_markup_mode: MarkupMode,
 ) -> TyperGroup:
+    """Build a Click `TyperGroup` from a `TyperInfo`, recursively including sub-apps."""
     assert group_info.typer_instance, (
         "A Typer instance is needed to generate a Click Group"
     )
@@ -1358,10 +1382,12 @@ def get_group_from_info(
 
 
 def get_command_name(name: str) -> str:
+    """Convert a Python identifier to a CLI command name (snake_case → kebab-case)."""
     return name.lower().replace("_", "-")
 
 
 def get_default_option_flag_name(name: str, metavar: str | None) -> str:
+    """Derive the default flag name for an option from its parameter name or metavar."""
     flag_name = name.replace("_", "-")
     if metavar is not None:
         meta_flag = metavar.replace("_", "-")
@@ -1373,6 +1399,7 @@ def get_default_option_flag_name(name: str, metavar: str | None) -> str:
 def get_params_convertors_ctx_param_name_from_function(
     callback: Callable[..., Any] | None,
 ) -> tuple[list[TyperArgument | TyperOption], dict[str, Any], str | None]:
+    """Extract Click parameters, convertors, and the context param from a callback."""
     params = []
     convertors = {}
     context_param_name = None
@@ -1395,6 +1422,7 @@ def get_command_from_info(
     pretty_exceptions_short: bool,
     rich_markup_mode: MarkupMode,
 ) -> _click.Command:
+    """Build a Click `TyperCommand` from a registered `CommandInfo`."""
     assert command_info.callback, "A command must have a callback function"
     name = command_info.name or get_command_name(command_info.callback.__name__)  # ty: ignore
     use_help = command_info.help
@@ -1435,6 +1463,7 @@ def get_command_from_info(
 
 
 def determine_type_convertor(type_: Any) -> Callable[[Any], Any] | None:
+    """Return the runtime convertor for `Path`-like and `Enum` annotations, if any."""
     convertor: Callable[[Any], Any] | None = None
     if lenient_issubclass(type_, Path):
         convertor = param_path_convertor
@@ -1444,6 +1473,7 @@ def determine_type_convertor(type_: Any) -> Callable[[Any], Any] | None:
 
 
 def param_path_convertor(value: str | None = None) -> Path | None:
+    """Convert a raw string to `Path`, passing through existing `Path` instances."""
     if value is not None:
         # allow returning any subclass of Path created by an annotated parser without converting
         # it back to a Path
@@ -1452,6 +1482,7 @@ def param_path_convertor(value: str | None = None) -> Path | None:
 
 
 def generate_enum_convertor(enum: type[Enum]) -> Callable[[Any], Any]:
+    """Build a convertor mapping raw values back to members of `enum`."""
     val_map = {str(val.value): val for val in enum}
 
     def convertor(value: Any) -> Any:
@@ -1467,6 +1498,8 @@ def generate_enum_convertor(enum: type[Enum]) -> Callable[[Any], Any]:
 def generate_list_convertor(
     convertor: Callable[[Any], Any] | None, default_value: Any | None
 ) -> Callable[[Sequence[Any] | None], list[Any] | None]:
+    """Build a convertor turning a sequence of raw values into a typed list."""
+
     def internal_convertor(value: Sequence[Any] | None) -> list[Any] | None:
         if (value is None) or (default_value is None and len(value) == 0):
             return None
@@ -1478,6 +1511,7 @@ def generate_list_convertor(
 def generate_tuple_convertor(
     types: Sequence[Any],
 ) -> Callable[[tuple[Any, ...] | None], tuple[Any, ...] | None]:
+    """Build a convertor applying per-position convertors to a tuple of values."""
     convertors = [determine_type_convertor(type_) for type_ in types]
 
     def internal_convertor(
@@ -1501,6 +1535,7 @@ def get_callback(
     context_param_name: str | None = None,
     pretty_exceptions_short: bool,
 ) -> Callable[..., Any] | None:
+    """Wrap a user callback to apply convertors and inject the context before calling it."""
     use_convertors = convertors or {}
     if not callback:
         return None
@@ -1530,6 +1565,7 @@ def get_callback(
 def get_click_type(
     *, annotation: Any, parameter_info: ParameterInfo
 ) -> types.ParamType:
+    """Map a Python type annotation and parameter config to a Click `ParamType`."""
     if parameter_info.click_type is not None:
         return parameter_info.click_type
 
@@ -1626,12 +1662,14 @@ def get_click_type(
 
 
 def lenient_issubclass(cls: Any, class_or_tuple: AnyType | tuple[AnyType, ...]) -> bool:
+    """`issubclass` that tolerates non-class first arguments (returns `False`)."""
     return isinstance(cls, type) and issubclass(cls, class_or_tuple)
 
 
 def get_click_param(
     param: ParamMeta,
 ) -> tuple[TyperArgument | TyperOption, Any]:
+    """Build a `TyperArgument`/`TyperOption` (and its convertor) from a `ParamMeta`."""
     # First, find out what will be:
     # * ParamInfo (ArgumentInfo or OptionInfo)
     # * default_value
@@ -1799,6 +1837,7 @@ def get_param_callback(
     callback: Callable[..., Any] | None = None,
     convertor: Callable[..., Any] | None = None,
 ) -> Callable[..., Any] | None:
+    """Wrap a user parameter callback (Click-style signature) applying the convertor."""
     if not callback:
         return None
     parameters = get_params_from_function(callback)
@@ -1849,6 +1888,7 @@ def get_param_callback(
 def get_param_completion(
     callback: Callable[..., Any] | None = None,
 ) -> Callable[..., Any] | None:
+    """Wrap a user autocompletion callback into Click's completion signature."""
     if not callback:
         return None
     parameters = get_params_from_function(callback)

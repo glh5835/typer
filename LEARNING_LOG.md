@@ -163,3 +163,15 @@
   3. 仓库没有根级 CONTRIBUTING.md 时，GitHub 新人第一站是空的——建一个链接官方指南 + 实操补充的文件是零冲突的增量贡献。
 - 我如何复现：`python -c "import typer.utils; print(typer.utils.get_params_from_function.__doc__[:60])"`；CONTRIBUTING.md 按章节从上到下执行即可复现整个环境搭建流程。
 - 下一步：阶段 6 收尾报告 REPORT.md 与 PR_DRAFT.md。
+
+## 阶段 6：收尾报告
+- 开始/结束时间：2026-10-09 04:45 – 05:00
+- 目标：REPORT.md（耗时/覆盖率对比/issue 结果/遗留问题/合规声明）+ PR_DRAFT.md（草稿，不提交）。
+- 我运行的命令：从 `artifacts/phase{1,2,5}/` 留档日志提取分模块覆盖率对比；`git log --oneline` 汇总各阶段 commit。
+- 关键输出：见 REPORT.md §2 的前后对比表与 §0 的合规声明。
+- 失败尝试：无。
+- 为什么这样做：报告里所有数字都从留档日志原样提取（而非凭记忆），保证"第二天照着学"时每个数字可复核。
+- 涉及文件：REPORT.md、PR_DRAFT.md。
+- 可迁移知识：收尾报告的核心是"可复核性"——每个结论都能指到一个 artifact 文件或一条可重跑的命令。
+- 我如何复现：按 REPORT.md §7 的命令清单逐条执行。
+- 下一步：无（任务收尾）。给仓库主人的后续建议见 REPORT.md §6。

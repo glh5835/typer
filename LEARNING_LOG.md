@@ -51,3 +51,39 @@
   4. 判定"环境正确"的最快办法：让目标包打印 `__file__`，确认导入的是工作区源码而非 site-packages。
 - 我如何复现：见 BASELINE.md「官方测试命令」一节的命令块；分支覆盖率复现需先临时给 pyproject 加 `branch=true`。
 - 下一步：阶段 2 按分支缺口清单补测试（`typer/testing.py:124-125`、`_completion_classes.py:83`、`_click/utils.py:366-372`、`core.py`/`cli.py` 部分分支）。
+
+## 阶段 2：补全测试（覆盖率缺口）
+- 开始/结束时间：2026-10-09 03:05 – 03:35
+- 目标：只针对覆盖缺口补测试，禁止重写/碰现有测试。
+- 我运行的命令：
+  - `pytest --cov=typer --cov-branch --cov-report=term-missing`（定位缺口，方法见阶段 1 踩坑）
+  - 目标测试：`pytest tests/test_result_repr.py tests/test_completion/test_bash_version.py tests/test_get_app_dir_paths.py tests/test_optional_enum_default.py -q`
+  - 全量：官方等价命令（1488 → **1503 passed**，0 failed）
+  - `ruff check --fix` + `ruff format`（新文件过 lint）
+- 关键输出 / 覆盖率变化：
+  | 文件 | 前 | 后 |
+  |---|---|---|
+  | `typer/testing.py` | 99%（124-125 缺） | **100%** |
+  | `typer/_completion_classes.py` | 99%（83 行缺） | **100%** |
+  | `typer/_click/utils.py` | 97%（45, 366-372 缺；8 个部分分支） | 语句缺口清零，部分分支 8→6 |
+  | `typer/main.py` | 10 个部分分支 | 9（1458->exit 被枚举 None 测试覆盖） |
+  | 全仓（官方口径） | 1488 passed / 177 语句缺 | **1503 passed / 168 语句缺** |
+- 新增文件（4 个，共 15 个测试）：
+  - `tests/test_result_repr.py`：`Result.__repr__` 成功态 `<Result okay>` 与异常态包含异常类名（typer.testing 公共行为，全仓此前从未调用过 repr）。
+  - `tests/test_completion/test_bash_version.py`：`BashComplete._check_version` 对 bash<4.4 打印 stderr 警告、bash≥5 无输出、版本串不可解析时提示检测失败（文档"Shell completion is not supported for Bash versions older than 4.4"的行为）。
+  - `tests/test_get_app_dir_paths.py`：`get_app_dir` 各平台目录布局（docstring 明文承诺的 roaming/LOCALAPPDATA/darwin/XDG 布局）+ `_posixify`。
+  - `tests/test_optional_enum_default.py`：`Optional[Enum]` 选项默认 None 时保持 None、传值时正确转枚举、非法值报错。
+- 失败尝试：
+  1. 首版 `test_get_app_dir_force_posix` 在真 Windows 上断言失败——**发现 vendored 代码里 `if WIN:` 分支先于 `force_posix` 判断提前 return，即 Windows 上 force_posix 参数实际不可达**（与上游 click 8.3.1 一致的结构）。判定为"上游设计如此"而非 typer bug：修正测试为 patch `WIN=False` 覆盖 posix 分支，另保留真实 Windows 行为断言（roaming 路径）。
+  2. 3 个断言用 `str(Path.home()/".x")` 比较失败：Windows 下 `expanduser("~/.x")` 产生混合分隔符 `C:\Users\L/.x`。改用 `Path(a) == Path(b)` 归一化比较。**教训：Windows 上断言路径永远用 Path 比较，别用字符串。**
+  3. 分支覆盖测量第二次踩 combine 坑（忘开 `branch=true`），重做一次。
+- 为什么选这些缺口：typer 主包语句覆盖已 100%，值得补的只剩三类——(a) typer 自身代码的分支缺口（testing/completion）；(b) vendored click 里 docstring 明文承诺但 Windows 跑不到的跨平台行为（get_app_dir）；(c) 数据转换边界（枚举 None）。跳过的：`_compat.py:509-515`（非 Windows 平台的 `else:` 分支，Windows 上物理不可达，伪造覆盖无意义）、`_termui_impl.py` 进度条终端交互（需要真 TTY）、import 期模块级代码（`rich_utils.py:83`）。
+- 如何读 coverage：先 `--cov-report=term-missing` 拿语句缺口；语句饱和后加 `--cov-branch` 看 `a->b` 部分分支（a 行的某条跳转路径从未发生）；对每个缺口先读源码判断"这是行为分支还是死代码/平台分支"，只给行为分支写测试。
+- 涉及文件：新增 4 个测试文件；`artifacts/phase2/{test_full_after.log,test_branchcov_after.log}`。
+- 可迁移知识：
+  1. 语句覆盖 100% ≠ 分支覆盖 100%，成熟项目要靠 `--cov-branch` 找剩余价值；
+  2. 跨平台库在单一平台上必有"物理不可达"分支（如 WIN 常量提前 return），正确做法是 monkeypatch 模块常量模拟平台 + 断言文档承诺的布局，而不是伪造；
+  3. 测试写完必须 `ruff check`（本项目 isort 把 `typer` 当第三方包排序、强制 `X | None` 语法）；
+  4. 断言路径用 `Path` 对象比较避免分隔符陷阱。
+- 我如何复现：`venv/Scripts/python.exe -m pytest tests/test_result_repr.py tests/test_completion/test_bash_version.py tests/test_get_app_dir_paths.py tests/test_optional_enum_default.py -v`；覆盖率对比看 `artifacts/phase1/test_branchcov.log` vs `artifacts/phase2/test_branchcov_after.log`。
+- 下一步：阶段 3 从 GitHub Issues 找 1-3 个可复现 bug，先写复现测试再修。
